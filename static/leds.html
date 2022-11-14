@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <!-- <link rel="stylesheet" href="styles.css"> -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  </head>
+  <body>
+    <script src="https://unpkg.com/vue@3"></script>
+    
+    <div id="app">
+      <div>
+        <select v-model="device">
+          <option value="troll">Troll</option>
+          <option value="sign">Sign</option>
+        </select>
+      </div>
+      <button type="button" @click="rainbow">Rainbow</button>
+      <select v-model="selected">
+        <option value="">Select a color</option>
+        <option v-for="rgb, label in colors" :value="{[label]: colors[label]}">{{ label }}</option>
+      </select>
+      <!-- <button type="button" @click="reset">reset</button> -->
+      <div>
+        <!-- <button type="button" @click="final.push(selected)">add</button> -->
+        <!-- <button type="button" @click="removeSelected">remove</button> -->
+        <!-- <button type="button" @click="final = [...final, selected]">add</button> -->
+        <input type="color" id="colorPicker" :value="hex" @input="colorInput" @change="colorChanged" ref="colorInput"/>
+        <label for="colorPicker">{{rgb}}</label>
+      </div>
+      <button type="button" @click="turnOn">On</button>
+      <button type="button" @click="turnOff">Off</button>
+      <!-- <div v-for="{color, rgb, code}, index in finalFormatted" :key="color.color" style="margin-top: 2rem;">
+        <input type="color" :id="color">
+        <label :for="color" :style="`width: 30px; height: 15px; background: rgb(${rgb}); display: block;`"></label>
+        <pre v-html="code" style="margin-top: 0;"></pre>
+      </div> -->
+    </div>
+    <script>
+      const arduino = "192.168.0.227"
+      //const esp = "http://70.191.119.213" //troll hair
+      const esp = "http://192.168.0.173" //sign
+      const esp32 = "http://192.168.0.172"
+      //const esp = "http://localhost:3003/"
+
+
+      //58-BF-25-DA-4F-E5
+      //192.168.0.233
+
+      //70.191.119.213
+
+      /*
+        background: url("data:image/svg+xml;base64,<svg viewBox=\"-10 -10 120 120\"><mask id=\"borderMask\"><rect x=\"0\" y=\"0\" width=\"100\" height=\"100\" fill=\"white\" /><rect x=\"10\" y=\"10\" width=\"80\" height=\"80\" fill=\"black\" /></mask><linearGradient id=\"myGradient\" gradientTransform=\"rotate(90)\" x1=\"-0.3\" x2=\"1.3\"><stop offset=\"0\" stop-color=\"red\"/><stop offset=\"0.2857\" stop-color=\"#ff0\"/><stop offset=\"0.4286\" stop-color=\"#0f0\"/><stop offset=\"0.5714\" stop-color=\"cyan\"/><stop offset=\"0.7142\" stop-color=\"blue\"/><stop offset=\"0.8571\" stop-color=\"#f0f\"/><stop offset=\"1\" stop-color=\"red\"/></linearGradient><polygon points=\"-10,110 110,110 110,-10\" fill=\"orange\"/><rect x=\"0\" y=\"0\" width=\"100\" height=\"100\" mask=\"url(#borderMask)\" fill=\"url(#myGradient)\"/><rect x=\"5\" y=\"5\" width=\"100\" height=\"100\" mask=\"url(#borderMask)\" fill=\"url(#myGradient)\"/><rect x=\"-5\" y=\"-5\" width=\"100\" height=\"100\" mask=\"url(#borderMask)\" fill=\"url(#myGradient)\"/><rect x=\"5\" y=\"5\" width=\"90\" height=\"90\" mask=\"url(#borderMask)\" fill=\"url(#myGradient)\"/></svg>")
+      */
+
+      const colors = {
+        red: [179,0,0],
+        pink: [179,0,45],
+        magenta: [179,0,146],
+        purple: [80,0,179],
+        blue: [0,0,179],
+        lightblue: [0,110,179],
+        aqua: [0,179,143],
+        green: [30,179,0],
+        yellow: [179,164,0],
+        orange: [179,18,0],
+      }
+
+
+      Vue.createApp({
+        data() {
+          return {
+            device: "troll",
+            final: [],
+            selected: "",
+            colors, 
+            test: []
+          }
+        },
+        computed: {
+          finalFormatted() {
+            return this.final.map(entry => {
+              const [color, rgb] = Object.entries(entry)[0]
+              return {
+                color,
+                rgb, 
+                code: `server.on("/${color.toLowerCase()}", []() {
+  setColor(${rgb});
+});`
+              }
+            })
+          },
+          rgb() {
+            if(this.selected === "") return "none"
+            return Object.values(this.selected)[0].join(",")
+          },
+          hex() {
+            if(this.selected === "") return "#000"
+            const [ r, g, b ] = Object.values(this.selected)[0]
+            const rgb = (r << 16) | (g << 8) | (b << 0)
+            return `#${(0x1000000 + rgb).toString(16).slice(1)}`
+          }
+        },
+        watch: {
+          final() {
+            //do the local storage stuff?
+            //remove from colors probably
+          },
+          colors() {
+            //console.log("updating colors");
+            //localStorage.setItem("colors", JSON.stringify(this.colors))
+            //save to local storage?
+          },
+          async selected() {
+            if(this.selected !== "") {
+              //console.log(this.selected, `http://localhost:3003/leds/${Object.keys(this.selected)[0]}`);
+              localStorage.setItem("selected", JSON.stringify(this.selected))
+              // const [red, green, blue] = Object.values(this.selected)[0].split(",").map(x => x.trim())
+              // const colorName = Object.keys(this.selected)[0].toLowerCase()
+              const response = await fetch(`http://localhost:3003/leds/${this.device}/${Object.keys(this.selected)[0]}`)
+               //const response = await fetch(`${esp}/rgb`, {
+                //   method: "POST",
+                //   headers: {
+                //     "Content-Type": "text/plain"
+                //   },
+                //   body: JSON.stringify({red, green, blue })
+                // }).then(res => res.json())
+
+                //console.log(response);
+
+            }
+            //send off this thing...
+          }
+        },
+        created() {
+
+        },
+        mounted() {
+          if(localStorage.getItem("selected") !== null) {
+            this.selected = JSON.parse(localStorage.getItem("selected"))
+          }
+
+          if(localStorage.getItem("colors") !== null) {
+            this.colors = JSON.parse(localStorage.getItem("colors"))
+          }
+        },
+        methods: {
+          async turnOn() {
+            const response = await fetch(`http://localhost:3003/leds/${this.device}/on`)
+          },
+          async turnOff() {
+            const response = await fetch(`http://localhost:3003/leds/${this.device}/off`)
+          },
+          async rainbow() {
+            const response = await fetch(`http://localhost:3003/leds/${this.device}/rainbow`)
+            //const response = await fetch(`${esp}/rainbow`)
+            console.log(response);
+          },
+          addToList() {
+            this.final = [...this.final, this.selected]
+          },
+          reset() {
+            this.colors = {...colors}
+          },
+          removeSelected() {
+            const index = Object.keys(this.colors).findIndex(color => Object.keys(this.selected)[0] === color)
+            this.colors = Object.entries(this.colors).reduce((obj, [key, value]) => {
+              return key !== Object.keys(this.selected)[0] ? {...obj, [key]: value} : obj
+            }, {})
+
+            if(index !== 0) {
+              const newKey = Object.entries(this.colors)[index][0]
+              this.selected = { [newKey]: this.colors[newKey] }
+              localStorage.setItem("index", index)
+            } else {
+              const newKey = Object.entries(this.colors)[0][0]
+              this.selected = { [newKey]: this.colors[newKey] }
+              localStorage.setItem("index", 0)
+            }
+          },
+          async colorInput({ target }) {
+            //send thing off
+            const rgb = this.getRgbValue(target.value)
+            this.test = [...this.test, rgb]
+            //console.log(this.test);
+
+            if(rgb !== null) {
+              const [red, green, blue] = rgb
+              //await fetch(`http://localhost:3003/leds/rgb`)
+              await fetch(`http://localhost:3003/leds/${this.device}/rgb`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({red, green, blue })
+              })
+            }
+          },
+          async colorChanged({ target }) {
+            //change in this.colors
+            // const selected = Object.keys(this.colors).find(color => Object.keys(this.selected)[0] === color)
+            // const rgb = this.getRgbValue(target.value)
+            // console.log(rgb);
+
+            // if(rgb !== null) {
+            //   // this.colors[selected] = rgb.join(",")
+            //   // this.selected = { [selected]: rgb.join(",") }
+              
+            // }
+
+          },
+          getRgbValue(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? [
+              parseInt(result[1], 16),
+              parseInt(result[2], 16),
+              parseInt(result[3], 16)
+            ] : null;
+          },
+          async rgbUpdated() {
+            const aRgbHex = this.rgb.replace("#", "").match(/.{1,2}/g);
+
+            await fetch(`${esp}/rgb`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "text/plain"
+              },
+              body: JSON.stringify({red: parseInt(aRgbHex[0], 16), green: parseInt(aRgbHex[1], 16), blue: parseInt(aRgbHex[2], 16)})
+            })
+          }
+        }
+      }).mount('#app')
+    </script>
+  </body>
+</html>

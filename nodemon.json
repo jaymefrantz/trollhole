@@ -1,0 +1,24 @@
+{
+  "restartable": "rs",
+  "ignore": [
+    ".git",
+    "node_modules/**/node_modules",
+    "dist",
+    "static/**"
+  ],
+  "verbose": false,
+  "execMap": {
+    "js": "node"
+  },
+  
+  "runOnChangeOnly": false,
+  "watch": [
+    "**/*.js",
+    "**/*.graphql",
+    "**/*.gql"
+  ],
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "ext": "js,json,graphql"
+}
