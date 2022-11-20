@@ -6,7 +6,7 @@ const { dirname } = path
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const port = 3003;
+const port = 3004;
 
 import { config as dotenvConfig } from "dotenv"
 import cors from "cors"
