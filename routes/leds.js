@@ -4,15 +4,17 @@ import { config as dotenvConfig } from "dotenv"
 import axios from "axios"
 dotenvConfig()
 const wait = (amount = 0) => new Promise(resolve => setTimeout(resolve, amount));
+// /status should be able to tell us? maybe?
 let rainbowOn = {
   troll: false,
-  sign: false,
-}
-let currentColors = {
-  troll: null,
-  sign: null,
+  artbox: false,
 }
 
+//todo: all this stuff should hold this...
+let currentColors = {
+  troll: null,
+  artbox: null,
+}
 
 //set up a colors object that has the color name as the key and the rgb values as the value
 const colors = {
@@ -26,6 +28,7 @@ const colors = {
   green: [30,179,0],
   yellow: [179,164,0],
   orange: [179,18,0],
+  lime: [7, 255, 110],
 }
 
 const rainbow = [
@@ -196,73 +199,130 @@ const rainbow = [
 
 router.get("/", async(req, res) => {
   //await axios.get(`http://70.191.119.213:3001/`)
-  console.log("hello from led root?");
+  //console.log("hello from led root?");
   //console.log("hello from led root??", req);
   res.send("Hello led World!");
 })
 
+//done
 router.get("/colors", async(req, res) => {
-  //await axios.get(`http://70.191.119.213:3001/`)
-  console.log("hello from led root?");
-  //console.log("hello from led root??", req);
   res.send(colors);
 })
 
+//todo:
 router.get("/:device/on", async(req, res) => {
   const { url, body, device } = getDeviceData(req)
-  const currentColor = currentColors[device]
-
   rainbowOn[device] = false
-  if(currentColor === "rainbow") {
-    cycleThroughRainbow({ url, device })
-  } else {
-    const [ red, green, blue ] = colors[currentColor] ?? colors["red"]
-    axios.post(`${url}/rgb`, device === "sign" ? { red, green, blue } : { red: 255-red, green: 255-green, blue: 255-blue })
+
+  try {
+    const { data } = await axios.get(`${url}/status`)
+    const { color: currentColor, red, green, blue } = data
+
+    if(currentColor === "rainbow") {
+      cycleThroughRainbow({ url, device }, [red, green, blue])
+    } else {
+      let [ red, green, blue ] = colors[currentColor] ?? colors["red"]
+      
+      if(device !== "artbox") {
+        [ red, green, blue ] = getInvertedColors([red, green, blue])
+      }
+      axios.post(`${url}/rgb`, { red, green, blue })
+    }
+    res.send(data);
+  } catch(error) {
+    console.log(error);
+    res.send({ error });
   }
+
   
-  res.send(`turned on ${currentColor}`);
+  //res.send(data);
 })
 
-//troll/{{TextField}}
-
-
+//done
 router.get("/:device/off", async(req, res) => {
   const { url, body, device } = getDeviceData(req)
   rainbowOn[device] = false
-  axios.post(`${url}/rgb`, device === "sign" ? { red: 0, green: 0, blue: 0} : { red: 255, green: 255, blue: 255})
-  res.send("successfully turned off");
+
+  try {
+    //DO NOT CHANGE - if this was run through regular rgb then previous and color vars on board will get messed up
+    const { data } = await axios.get(`${url}/off`)
+    res.send(data);
+  } catch(error) {
+    console.log(error);
+    res.send({ error });
+  }
 })
 
+//ok
 router.get("/:device/rainbow", async(req, res) => {
   const { url, body, device } = getDeviceData(req)
-  setDeviceData(req, true)
+  setDeviceData(req)
+  await wait(100)
   cycleThroughRainbow({ url, device })
 
   res.send("Hello from rainbow!");
 })
 
+//done
+router.get("/:device/rainbow/start", async(req, res) => {
+  const { url, body, device } = getDeviceData(req)
+  cycleThroughRainbow({ url, device }, Object.values(req.query).map(value => parseInt(value)))
+  res.send("inside starting rainbow?");
+})
+
+//done
+router.get("/:device/rainbow/stop", async(req, res) => {
+  let { device } = req.params
+  rainbowOn[device] = false
+  res.send("inside stopping rainbow")
+})
+
+//done
+router.get("/:device/status", async(req, res) => {
+  const { url, body, device } = getDeviceData(req) 
+
+  try {
+    const { data } = await axios.get(`${url}/status`)
+    res.send(data);
+  } catch(error) {
+    console.log(error);
+    res.send({ error });
+  }
+})
+
+//done
 router.post("/:device/rgb", async(req, res) => {
   const { url, body, device } = getDeviceData(req)
   rainbowOn[device] = false
 
-  await axios.post(`${url}/rgb`, body)
-  res.send("Hello from actual color!");
+  try {
+    const { data } = await axios.post(`${url}/rgb`, {...body, name: "custom"})
+    res.send(data);
+  } catch(error) {
+    console.log(error);
+    res.send({ error });
+  }
 })
 
+//done
+router.get("/:device/rgb", async(req, res) => {
+  const { url, body, device } = getDeviceData(req)
+  const [ red, green, blue ] = colors[req.query.color]
+  res.send({ red, green, blue })
+})
+
+//done
 router.get("/:device/:color", async(req, res) => {
-  //console.log("i have gotten here at least?", req.params.color);
   const { url, body, device } = getDeviceData(req) 
   setDeviceData(req)
 
-  console.log(url);
-  console.log(body);
-
   try {
-    await axios.post(`${url}/rgb`, body)
+    const { data } = await axios.post(`${url}/rgb`, {...body, name: req.params.color})
+    res.send(data);
   } catch(error) {
     console.log(error);
+    res.send({ error });
   }
-  res.send("Hello from actual color!");
 })
 
 function setDeviceData({ params }, isRainbow = false) {
@@ -274,41 +334,56 @@ function setDeviceData({ params }, isRainbow = false) {
 
 function getDeviceData({ params, body }) {
   let { color, device } = params
-  //let url = process.env.TROLL_HAIR_ESP8266
-  let url = "http://70.191.119.213:3001"
-  if(device === "sign") {
-    url = process.env.SIGN_ESP8266
-  }
+  let url = `${process.env.ROUTER}:${device === "artbox" ? process.env.ARTBOX_ESP8266 : process.env.TROLL_HAIR_ESP8266}`
 
   if(typeof color !== "undefined") {
-    const [ red, green, blue ] = colors[color.toLowerCase()]
-    return { url, body: device === "sign" ? { red, green, blue } : { red: 255-red, green: 255-green, blue: 255-blue }, device }
+    let [ red, green, blue ] = colors[color.toLowerCase()]
+    if(device !== "artbox") {
+      [ red, green, blue ] = getInvertedColors([red, green, blue])
+    }
+    return { url, body: { red, green, blue }, device }
   } else if(Object.entries(body).length > 0) {
     //means it probably came from the color picker /rgb
-    const { red, green, blue } = body
-    return { url, body: device === "sign" ? { red, green, blue } : { red: 255-red, green: 255-green, blue: 255-blue }, device }
+    let { red, green, blue } = body
+    if(device !== "artbox") {
+      [ red, green, blue ] = getInvertedColors([red, green, blue])
+    }
+    return { url, body: { red, green, blue }, device }
   } else {
     return { url, device }
   }
 }
 
-async function cycleThroughRainbow({url, device}) {
+async function cycleThroughRainbow({ url, device }, existingColors = null) {
   rainbowOn[device] = true
   currentColors[device] = "rainbow"
-  console.log(currentColors);
   let index = 0
+  if(existingColors !== null) {
+    index = rainbow.findIndex(rgb => {
+      return JSON.stringify(rgb) === JSON.stringify(existingColors)
+    })
+  }
+  //console.log(currentColors);
 
   while(rainbowOn[device]) {
     if(index === rainbow.length - 1) {
       index = 0
     }
 
-    const [ red, green, blue ] = rainbow[index]
-    await axios.post(`${url}/rgb`, device === "sign" ? { red, green, blue } : { red: 255-red, green: 255-green, blue: 255-blue })
+    let [ red, green, blue ] = rainbow[index]
+    if(device !== "artbox") {
+      [ red, green, blue ] = getInvertedColors([red, green, blue])
+    }
+    const { data } = await axios.post(`${url}/rgb`, { red, green, blue, name: "rainbow" })
     await wait(50)
+    //console.log("i am cycling?");
 
     index++;
   }
+}
+
+function getInvertedColors(colors) {
+  return colors.map(value => 255 - value)
 }
 
 
