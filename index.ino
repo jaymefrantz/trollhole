@@ -3,7 +3,9 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h> // Include ArduinoJson Library
+#include <Arduino_JSON.h>
 #include "artbox.h"
 
 const char *ssid = "TP-Link_16A6"; // Your SSID
@@ -22,7 +24,8 @@ ESP8266WebServer server(port);
 int buttonState = 0;
 int previousButtonState = 0;
 bool ledState = false;
-int previousRGB[] = { 255, 0, 255 };
+int previousRGB[] = { 0, 0, 0 };
+String API = "http://70.191.119.213:3004/leds/" + name;
 
 void turnStatusLedRed() {
    analogWrite(STATUS_RGB_RED, 76);
@@ -97,11 +100,60 @@ void setup() {
     server.send(200, "text/plain", "Hello from ESP8266!");
   });
 
+server.on("/status", []() {  
+  const int capacity = JSON_OBJECT_SIZE(6);
+  StaticJsonDocument<capacity> doc;
+  doc["isOn"] = ledState;
+  doc["green"] = previousRGB[1];
+  doc["blue"] = previousRGB[2];
+  doc["red"] = previousRGB[0];
+  doc["color"] = color;
+  
+  String buf;
+  serializeJson(doc, buf);
+  server.send(200, F("application/json"), buf);
+
+  
+  int blue = 255 - 179;
+  analogWrite(STATUS_RGB_RED, 255);
+  analogWrite(STATUS_RGB_GREEN, 255);
+  analogWrite(STATUS_RGB_BLUE, blue);
+  delay(500);
+  analogWrite(STATUS_RGB_BLUE, 255);
+  delay(500);
+  analogWrite(STATUS_RGB_BLUE, blue);
+  delay(500);
+  analogWrite(STATUS_RGB_BLUE, 255);
+  delay(500);
+  analogWrite(STATUS_RGB_BLUE, blue);
+  delay(255);
+  turnStatusLedGreen();
+});
+
+server.on("/off", []() {
+ turnOffLed(false);
+ ledState = false;
+ const int capacity = JSON_OBJECT_SIZE(6);
+  StaticJsonDocument<capacity> doc;
+  doc["isOn"] = ledState;
+  doc["green"] = previousRGB[1];
+  doc["blue"] = previousRGB[2];
+  doc["red"] = previousRGB[0];
+  doc["color"] = color;
+  
+  String buf;
+  serializeJson(doc, buf);
+  server.send(200, F("application/json"), buf);
+});
+
 server.on("/rgb", []() {
     String data_string = server.arg("plain");
     StaticJsonDocument<400> jDoc;
     DeserializationError err = deserializeJson(jDoc, data_string);
     JsonObject object = jDoc.as<JsonObject>();
+    //color = object[String("name")];
+    String name = object["name"];
+    color = name;
     int rgbRed = (int)object["red"];
     int rgbGreen = (int)object["green"];
     int rgbBlue = (int)object["blue"];
@@ -112,17 +164,18 @@ server.on("/rgb", []() {
     previousRGB[1] = rgbGreen;
     previousRGB[2] = rgbBlue;
     ledState = true;
-    const int capacity = JSON_OBJECT_SIZE(3);
+    const int capacity = JSON_OBJECT_SIZE(5);
     StaticJsonDocument<capacity> doc;
     doc["green"] = rgbGreen;
     doc["blue"] = rgbBlue;
     doc["red"] = rgbRed;
+    doc["color"] = color;
     String buf;
 
     serializeJson(doc, buf);
     
     server.send(200, F("application/json"), buf);
-    Serial.println("I have heard the request");
+    //Serial.println("I have heard the request");
   });
 }
 
@@ -139,17 +192,45 @@ void loop() {
   buttonState = digitalRead(BUTTON_PIN);
   if(previousButtonState && !buttonState) {
     //see if it's on or off then do stuff...
-    Serial.print("ledState is:");
-    Serial.println(ledState);
+//    Serial.print("ledState is: ");
+//    Serial.println(ledState);
+//    Serial.print("color ");
+//    Serial.println(color);
 
     if(ledState) {
       turnOffLed(false);
       ledState = false;
+      if(color == "rainbow") {
+        String endpoint = API + "/rainbow/stop";
+        httpGETRequest(endpoint);
+        delay(100);
+        turnOffLed(false);
+      }
     } else {
       ledState = true;
-      analogWrite(RGB_RED, previousRGB[0]);
-      analogWrite(RGB_GREEN, previousRGB[1]);
-      analogWrite(RGB_BLUE, previousRGB[2]);
+      bool noPreviousRGBs = previousRGB[0] == 0 && previousRGB[1] == 0 && previousRGB[2] == 0;
+
+      if(noPreviousRGBs) {
+        String endpoint = API + "/rgb?color=" + color;
+        String json = httpGETRequest(endpoint);
+        JSONVar myObject = JSON.parse(json);
+        JSONVar keys = myObject.keys();
+        
+        for (int i = 0; i < keys.length(); i++) {
+          JSONVar value = myObject[keys[i]];
+          previousRGB[i] = value;
+        }
+      } 
+      
+      if(color != "rainbow") {
+        analogWrite(RGB_RED, previousRGB[0]);
+        analogWrite(RGB_GREEN, previousRGB[1]);
+        analogWrite(RGB_BLUE, previousRGB[2]);
+      } else {
+        Serial.println("start rainbow");
+        String endpoint = API + "/rainbow/start?red=" + previousRGB[0] + "&blue=" + previousRGB[1] + "&green=" + previousRGB[2];
+        httpGETRequest(endpoint);
+      }
     }
   }
 
@@ -157,3 +238,28 @@ void loop() {
   delay(100);
 }
 
+String httpGETRequest(const String serverName) {
+  WiFiClient client;
+  HTTPClient http;
+    
+  // Your IP address with path or Domain name with URL path 
+  http.begin(client, serverName);
+  
+  // Send HTTP POST request
+  int httpResponseCode = http.GET();
+  String payload = "{}"; 
+  
+  if (httpResponseCode > 0) {
+    Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+    payload = http.getString();
+  }
+  else {
+    Serial.print("Error code: ");
+    Serial.println(httpResponseCode);
+  }
+  // Free resources
+  http.end();
+
+  return payload;
+}
