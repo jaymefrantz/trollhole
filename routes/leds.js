@@ -226,7 +226,7 @@ router.get("/:device/on", async(req, res) => {
       if(device !== "artbox") {
         [ red, green, blue ] = getInvertedColors([red, green, blue])
       }
-      axios.post(`${url}/rgb`, { red, green, blue })
+      axios.post(`${url}/rgb`, { red, green, blue, name: currentColor })
     }
     res.send(data);
   } catch(error) {
@@ -260,21 +260,21 @@ router.get("/:device/rainbow", async(req, res) => {
   await wait(100)
   cycleThroughRainbow({ url, device })
 
-  res.send("Hello from rainbow!");
+  res.send({});
 })
 
 //done
 router.get("/:device/rainbow/start", async(req, res) => {
   const { url, body, device } = getDeviceData(req)
   cycleThroughRainbow({ url, device }, Object.values(req.query).map(value => parseInt(value)))
-  res.send("inside starting rainbow?");
+  res.send({});
 })
 
 //done
 router.get("/:device/rainbow/stop", async(req, res) => {
   let { device } = req.params
   rainbowOn[device] = false
-  res.send("inside stopping rainbow")
+  res.send({})
 })
 
 //done
@@ -294,7 +294,6 @@ router.get("/:device/status", async(req, res) => {
 router.post("/:device/rgb", async(req, res) => {
   const { url, body, device } = getDeviceData(req)
   rainbowOn[device] = false
-
   try {
     const { data } = await axios.post(`${url}/rgb`, {...body, name: "custom"})
     res.send(data);
@@ -315,9 +314,11 @@ router.get("/:device/rgb", async(req, res) => {
 router.get("/:device/:color", async(req, res) => {
   const { url, body, device } = getDeviceData(req) 
   setDeviceData(req)
+  console.log("i have heard?");
 
   try {
     const { data } = await axios.post(`${url}/rgb`, {...body, name: req.params.color})
+    console.log("im back");
     res.send(data);
   } catch(error) {
     console.log(error);
@@ -345,6 +346,7 @@ function getDeviceData({ params, body }) {
   } else if(Object.entries(body).length > 0) {
     //means it probably came from the color picker /rgb
     let { red, green, blue } = body
+    console.log(red, green, blue);
     if(device !== "artbox") {
       [ red, green, blue ] = getInvertedColors([red, green, blue])
     }

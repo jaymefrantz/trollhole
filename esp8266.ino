@@ -164,12 +164,13 @@ server.on("/rgb", []() {
     previousRGB[1] = rgbGreen;
     previousRGB[2] = rgbBlue;
     ledState = true;
-    const int capacity = JSON_OBJECT_SIZE(5);
+    const int capacity = JSON_OBJECT_SIZE(6);
     StaticJsonDocument<capacity> doc;
     doc["green"] = rgbGreen;
     doc["blue"] = rgbBlue;
     doc["red"] = rgbRed;
     doc["color"] = color;
+    doc["isOn"] = ledState;
     String buf;
 
     serializeJson(doc, buf);
