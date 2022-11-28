@@ -11,44 +11,48 @@ const char* ssid = "TP-Link_16A6";  // Your SSID
 const char* password = "80050551"; // Your Password
 
 WebServer server(port);  // create instance for web server on port "80"
-WebSocketsServer webSocket = WebSocketsServer(81);
+WebSocketsServer webSocket = WebSocketsServer(wsPort);
 
 #define RGB_RED A0
 #define RGB_GREEN A1
-#define RGB_BLUE A2
+#define RGB_BLUE A5
+ #define STATUS_RGB_RED 27
+ #define STATUS_RGB_GREEN 33
+ #define STATUS_RGB_BLUE 15
 #define BUTTON_PIN 12
 int buttonState = 0;
 int previousButtonState = 0;
 bool ledState = false;
 int successRGB[] = { 225, 76, 255 };
 int errorRGB[] = { 76, 255, 255 };
-int neutralRGB[] = { 0, 0, 179 };
+int neutralRGB[] = { 255, 255, 76 };
+bool changingStatus = false;
 
 void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   ledcAttachPin(RGB_RED, 1); // assign RGB led pins to channels
   ledcAttachPin(RGB_GREEN, 2);
   ledcAttachPin(RGB_BLUE, 3);
-  // ledcAttachPin(STATUS_RGB_RED, 4); // assign RGB led pins to channels
-  // ledcAttachPin(STATUS_RGB_GREEN, 5);
-  // ledcAttachPin(STATUS_RGB_BLUE, 6);
+  ledcAttachPin(STATUS_RGB_RED, 4); // assign RGB led pins to channels
+  ledcAttachPin(STATUS_RGB_GREEN, 5);
+  ledcAttachPin(STATUS_RGB_BLUE, 6);
   ledcSetup(1, 12000, 8); // 12 kHz PWM, 8-bit resolution
   ledcSetup(2, 12000, 8);
   ledcSetup(3, 12000, 8);
-  // ledcSetup(4, 12000, 8); // 12 kHz PWM, 8-bit resolution
-  // ledcSetup(5, 12000, 8);
-  // ledcSetup(6, 12000, 8);
-  turnOffLed("artbox");
-  //turnOffLed("status");
+  ledcSetup(4, 12000, 8); // 12 kHz PWM, 8-bit resolution
+  ledcSetup(5, 12000, 8);
+  ledcSetup(6, 12000, 8);
+  turnOffLed(device);
+  turnOffLed("status");
   // put your setup code here, to run once:
   Serial.begin(115200); // Init Serial for Debugging.
   WiFi.begin(ssid, password); // Connect to Wifi 
   while (WiFi.status() != WL_CONNECTED) { // Check if wifi is connected or not
-    //turnOffLed("status");
+  turnOffLed("status");
     delay(500);
     Serial.print(".");
-    //changeStatus(neutralRGB);
-    //delay(500);
+    changeStatus(neutralRGB);
+    delay(500);
   }
   Serial.println();
   // Print the IP address in the serial monitor windows.
@@ -67,52 +71,74 @@ void setup() {
   });
 
   server.on("/status", []() {
-    StaticJsonDocument doc = getStatus();
+    DynamicJsonDocument doc = getStatus();
     String status;
     serializeJson(doc, status);
     Serial.println(status);
     server.send(200, F("application/json"), status);
+    showStatusChange();
   });
 
-  server.on("/off", []() {
-    turnOffLed(false);
-    ledState = false;
-    const int capacity = JSON_OBJECT_SIZE(6);
-      StaticJsonDocument<capacity> doc;
-      doc["isOn"] = ledState;
-      doc["green"] = previousRGB[1];
-      doc["blue"] = previousRGB[2];
-      doc["red"] = previousRGB[0];
-      doc["color"] = color;
-      
-      String buf;
-      serializeJson(doc, buf);
-      server.send(200, F("application/json"), buf);
-  });
-
-  server.on("/rgb", []() {
+  server.on("/rgb", [](){
     String data_string = server.arg("plain");
     StaticJsonDocument<400> jDoc;
     DeserializationError err = deserializeJson(jDoc, data_string);
     JsonObject object = jDoc.as<JsonObject>();
     String name = object["name"];
+    if(name == "null") {
+      Serial.println("i am here of course?");
+      server.send(200, F("application/json"), "who is calling this??");
+      return; //same route is called twice when using in browser, not postman, yet network only has one call
+    }
+
     color = name;
     int rgbRed = (int)object["red"];
     int rgbGreen = (int)object["green"];
     int rgbBlue = (int)object["blue"];
+    bool isOff = (rgbRed == 255 && rgbGreen == 255 && rgbBlue == 255 && isInverted) || (rgbRed == 0 && rgbGreen == 0 && rgbBlue == 0 && !isInverted);
+//    Serial.println(name);
+//    Serial.print(rgbRed);
+//    Serial.print(", ");
+//    Serial.print(rgbGreen);
+//    Serial.print(", ");
+//    Serial.print(rgbBlue);
+//    Serial.println(" ");
+    if(isOff) {
+      turnOffLed(device);
+      ledState = false;
+    } else {
+      previousRGB[0] = rgbRed;
+      previousRGB[1] = rgbGreen;
+      previousRGB[2] = rgbBlue;
+      ledState = true;
+    }
+    
     ledcWrite(1, rgbRed); // write red component to channel 1, etc.
     ledcWrite(2, rgbGreen);   
     ledcWrite(3, rgbBlue); 
-    previousRGB[0] = rgbRed;
-    previousRGB[1] = rgbGreen;
-    previousRGB[2] = rgbBlue;
-    ledState = true;
-    StaticJsonDocument doc = getStatus();
+    DynamicJsonDocument doc = getStatus();
     String status;
     serializeJson(doc, status);
-    Serial.println(status);
+    //Serial.println(status);
     server.send(200, F("application/json"), status);
+    if(color != "rainbow") {
+      showStatusChange();
+    }
   });
+
+   server.on("/status/rgb", []() {
+     String data_string = server.arg("plain");
+     StaticJsonDocument<400> jDoc;
+     DeserializationError err = deserializeJson(jDoc, data_string);
+     JsonObject object = jDoc.as<JsonObject>();
+     int rgbRed = (int)object["red"];
+     int rgbGreen = (int)object["green"];
+     int rgbBlue = (int)object["blue"];
+     ledcWrite(4, rgbRed); // write red component to channel 1, etc.
+     ledcWrite(5, rgbGreen);   
+     ledcWrite(6, rgbBlue); 
+     server.send(200, F("application/json"), "got 'em");
+   });
 }
 
 void loop() {
@@ -120,10 +146,12 @@ void loop() {
   webSocket.loop(); // websocket server methode that handles all Client
   buttonState = digitalRead(BUTTON_PIN);
 
-  if(WiFi.status() == WL_CONNECTED) {
-    // changeStatus(successRGB);
-  } else {
-    // changeStatus(errorRGB);
+  if(!changingStatus) {
+    if(WiFi.status() == WL_CONNECTED) {
+      changeStatus(successRGB);
+    } else {
+      changeStatus(errorRGB);
+    }
   }
 
   if(previousButtonState && !buttonState) {
@@ -139,31 +167,40 @@ void loop() {
       }
     }
 
-    String status = getStatus();
-    Serial.println(buf);
-    StaticJsonDocument doc = getStatus();
-    String status;
-    serializeJson(doc, status);
+    DynamicJsonDocument doc = getStatus();
 
     if(color == "rainbow") {
       doc["rainbow"] = ledState; //this might be different need some way to communicate
     }
 
+    String status;
+    serializeJson(doc, status);
     webSocket.broadcastTXT(status);
+    showStatusChange();
   }
 
   previousButtonState = buttonState;
+  //Serial.println(changingStatus);
   delay(100);
 }
 
-//String getStatus() {
-StaticJsonDocument getStatus() {
+void showStatusChange() {
+  int delayMs = 125;
+  changingStatus = true;
+
+  for (int i=0; i<= 4; i++) {
+    changeStatus(neutralRGB);
+    delay(delayMs);
+    turnOffLed("status");
+    delay(delayMs);
+  }
+
+  changingStatus = false;
+}
+
+DynamicJsonDocument getStatus() {
     //todo turn on and off status 
-    //turnOffLed("status");
-    //delay(500);
-    //Serial.print(".");
-    //changeStatus(neutralRGB);
-    //delay(500);
+    turnOffLed("status");
     const int capacity = JSON_OBJECT_SIZE(6);
     StaticJsonDocument<capacity> doc;
     doc["green"] = previousRGB[1];
@@ -171,11 +208,9 @@ StaticJsonDocument getStatus() {
     doc["red"] = previousRGB[0];
     doc["color"] = color;
     doc["isOn"] = ledState;
+    doc["device"] = device;
+    //showStatusChange();
     return doc;
-    // String buf;
-
-    // serializeJson(doc, buf);
-    // return buf;
 }
 
 void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {
@@ -212,30 +247,30 @@ void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {
 }
 
 void turnOffLed(String device) {
-  int redChanel = 4;
-  int greenChanel = 5;
-  int blueChanel = 6;
-  int off[] = { 0, 0, 0 };
+   int redChanel = 1;
+   int greenChanel = 2;
+   int blueChanel = 3;
+   int off[] = { 0, 0, 0 };
 
-  if(device != "status") {
-    redChanel = 1;
-    greenChanel = 2;
-    blueChanel = 3;
-  }
+   if(device == "status") {
+     redChanel = 4;
+     greenChanel = 5;
+     blueChanel = 6;
+   }
 
-  if(device == "artbox") {
-    ledcWrite(1, 255); // write red component to channel 1, etc.
-    ledcWrite(2, 255);   
-    ledcWrite(3, 255); 
-  }
+   if(isInverted || device == "status") {
+     off[0] = 255;
+     off[1] = 255;
+     off[2] = 255;
+   }
 
-    ledcWrite(redChanel, 255); // write red component to channel 1, etc.
-    ledcWrite(greenChanel, 255);   
-    ledcWrite(blueChanel, 255); 
+  ledcWrite(redChanel, off[0]); // write red component to channel 1, etc.
+  ledcWrite(greenChanel, off[1]);   
+  ledcWrite(blueChanel, off[2]);  
 }
 
 void changeStatus(int rgb[]) {
-    ledcWrite(4, rgb[0]); // write red component to channel 1, etc.
-    ledcWrite(5, rgb[1]);   
-    ledcWrite(6, rgb[2]); 
+   ledcWrite(4, rgb[0]); // write red component to channel 1, etc.
+   ledcWrite(5, rgb[1]);   
+   ledcWrite(6, rgb[2]); 
 }
