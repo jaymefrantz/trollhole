@@ -1,9 +1,11 @@
 import express from "express"
 const app = express()
+import * as http from 'http';
+const server = http.createServer(app);
 import { fileURLToPath } from "url"
 import path from "path"
 const { dirname } = path
-import { WebSocketServer } from "ws";
+
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -13,8 +15,12 @@ import { config as dotenvConfig } from "dotenv"
 import cors from "cors"
 import kitchenLedsRouter from "./routes/kitchen-leds.js"
 import ledsRouter from "./routes/leds.js"
+import initWebsocket from "./devices.js"
 app.use(express.json())
 app.use(cors())
+
+initWebsocket(server)
+
 
 app.use(express.static(path.join(__dirname, "./static")))
 // app.set("trust proxy", "loopback")
@@ -53,7 +59,7 @@ app.post("/", (req, res) => {
 app.use("/kitchen-leds", kitchenLedsRouter)
 app.use("/leds", ledsRouter)
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
 
@@ -62,17 +68,7 @@ app.listen(port, () => {
   kitchenLedsRouter.initKitchenLeds()
 }());
 
-const wss = new WebSocketServer({port: 3008})
-let devices = {}
 
-wss.on("connection", function connection(ws) {
-  console.log("i got a connection?");
-  ws.on("message", (data) => {
-    console.log('received: %s', data);
-  });
-
-  ws.send('something');
-});
 
 
 
