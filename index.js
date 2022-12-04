@@ -3,10 +3,11 @@ const app = express()
 import { fileURLToPath } from "url"
 import path from "path"
 const { dirname } = path
+import { WebSocketServer } from "ws";
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const port = 3004;
+const port = 3003;
 
 import { config as dotenvConfig } from "dotenv"
 import cors from "cors"
@@ -61,6 +62,17 @@ app.listen(port, () => {
   kitchenLedsRouter.initKitchenLeds()
 }());
 
+const wss = new WebSocketServer({port: 3008})
+let devices = {}
+
+wss.on("connection", function connection(ws) {
+  console.log("i got a connection?");
+  ws.on("message", (data) => {
+    console.log('received: %s', data);
+  });
+
+  ws.send('something');
+});
 
 
 
