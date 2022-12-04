@@ -47,7 +47,7 @@ app.get("/", async (req, res) => {
 
 app.post("/", (req, res) => {
   console.log(req.body);
-  res.send("Hello from post root?!");
+  res.send("is buddy working??");
 })
 
 app.use("/kitchen-leds", kitchenLedsRouter)
