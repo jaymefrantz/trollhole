@@ -1,4 +1,4 @@
-import { WebSocketServer } from 'ws'
+import WebSocket, { WebSocketServer } from "ws";
 
 /*
   devices = {
@@ -15,13 +15,27 @@ export default function initWebsocket(server) {
   wss.on("connection", (ws) => {
     //console.log("i got a connection?");
     ws.on("message", string => {
-      const json = JSON.parse(string)
+      const { device, ...json } = JSON.parse(string)
+      //console.log(wss.clients);
       console.log(json);
-      //devices[json.device] = {...json.data, timestamp: new Date()}
+      devices[device] = {...json, timestamp: new Date()}
       //send back devices to all other clients?
-
+      wss.clients.forEach(client => {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({...devices[device], device}));
+        }
+      });
     });
 
-    //ws.send('hello from node server...?');
+    //this was just a test...
+    // ws.send(JSON.stringify({
+    //   device: "artbox",
+    //   green: 179,
+    //   blue: 0,
+    //   red: 30,
+    //   color: 'green',
+    //   isOn: false,
+    //   initial: true
+    // }));
   });
 }
