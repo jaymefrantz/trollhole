@@ -47,7 +47,7 @@ import axios from "axios"
 app.get("/", async (req, res) => {
   //const test = await axios.get('http://70.191.119.213:3003/')
   //const test = await axios.get('https://jsonplaceholder.typicode.com/todos/1')
-  console.log("ive heard something?");
+  console.log("hello from root get endpoint?");
   res.send("is remote dev working?");
 })
 
