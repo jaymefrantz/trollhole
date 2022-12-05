@@ -48,7 +48,7 @@ app.get("/", async (req, res) => {
   //const test = await axios.get('http://70.191.119.213:3003/')
   //const test = await axios.get('https://jsonplaceholder.typicode.com/todos/1')
   console.log("ive heard something?");
-  res.send("is buddy working??");
+  res.send("is remote dev working?");
 })
 
 app.post("/", (req, res) => {
