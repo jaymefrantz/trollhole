@@ -21,9 +21,9 @@ export default function initWebsocket(server) {
       devices[device] = {...json, timestamp: new Date()}
       //send back devices to all other clients?
       wss.clients.forEach(client => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
+        //if (client !== ws && client.readyState === WebSocket.OPEN) {
           client.send(JSON.stringify({...devices[device], device}));
-        }
+        //}
       });
     });
 
