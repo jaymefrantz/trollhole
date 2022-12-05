@@ -12,19 +12,25 @@ export default function initWebsocket(server) {
   const wss = new WebSocketServer({ server });
   let devices = {}
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", ws => {
     //console.log("i got a connection?");
     ws.on("message", string => {
-      const { device, ...json } = JSON.parse(string)
-      //console.log(wss.clients);
-      console.log(json);
-      devices[device] = {...json, timestamp: new Date()}
-      //send back devices to all other clients?
-      wss.clients.forEach(client => {
-        //if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({...devices[device], device}));
-        //}
-      });
+      const { device, method = "update", ...json } = JSON.parse(string)
+
+      if(method === "get") { //app calls this on connection to socket
+        Object.entries(devices).forEach(([device, data]) => {
+          ws.send(JSON.stringify({ device, ...data }))
+        })
+      } else {
+        console.log(json);
+        devices[device] = {...json, timestamp: new Date()}
+        //send back devices to all other clients?
+        wss.clients.forEach(client => {
+          //if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({...devices[device], device}));
+          //}
+        });
+      }
     });
 
     //this was just a test...
