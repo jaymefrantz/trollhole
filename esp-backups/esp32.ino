@@ -3,6 +3,7 @@
 #include <ArduinoJson.h> // Include ArduinoJson Library
 #include <Arduino.h>
 #include <WiFiClient.h>
+//#include <WiFiClientSecure.h>
 #include <Arduino_JSON.h>
 #include <WebSocketsServer.h>
 #include "artbox.h"
